@@ -1,0 +1,26 @@
+@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <header class="app-bar">
+        <div class="app-bar-inner">
+            <a class="brand" href="/">
+                <span class="brand-mark">U</span>
+                <span>UserManager</span>
+            </a>
+            <nav class="app-nav">
+                <NavLink href="/" Match="NavLinkMatch.All">Pulpit</NavLink>
+                <NavLink href="/users">Użytkownicy</NavLink>
+            </nav>
+        </div>
+    </header>
+
+    <main class="app-main">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui">
+    Wystąpił nieoczekiwany błąd.
+    <a href="" class="reload">Odśwież</a>
+    <a class="dismiss">🗙</a>
+</div>

@@ -1,0 +1,36 @@
+<span class="avatar" style="background-color:@Color" title="@Name" aria-hidden="true">@Initials</span>
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = string.Empty;
+
+    private static readonly string[] Palette =
+    {
+        "#6366f1", "#0ea5e9", "#10b981", "#f59e0b",
+        "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"
+    };
+
+    private string Color => Palette[StableHash(Name) % Palette.Length];
+
+    private string Initials => GetInitials(Name);
+
+    private static int StableHash(string value)
+    {
+        unchecked
+        {
+            var hash = 17;
+            foreach (var c in value)
+            {
+                hash = hash * 31 + c;
+            }
+            return Math.Abs(hash);
+        }
+    }
+
+    private static string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][..1].ToUpperInvariant();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+}

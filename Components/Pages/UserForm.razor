@@ -1,0 +1,165 @@
+@page "/users/new"
+@page "/users/{Id:int}/edit"
+@using UserManager.Models
+@using UserManager.Services
+@inject IUserService UserService
+@inject NavigationManager Nav
+
+<PageTitle>@(_isEdit ? "Edycja użytkownika" : "Nowy użytkownik") · UserManager</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>@(_isEdit ? "Edytuj użytkownika" : "Nowy użytkownik")</h1>
+        <p>@(_isEdit ? "Zaktualizuj dane wybranego użytkownika." : "Wypełnij formularz, aby dodać użytkownika.")</p>
+    </div>
+    <a class="btn btn-ghost" href="/users">← Wróć do listy</a>
+</div>
+
+@if (_notFound)
+{
+    <div class="form-card">
+        <div class="empty">
+            <h3>Nie znaleziono użytkownika</h3>
+            <p>Rekord o podanym identyfikatorze nie istnieje lub został usunięty.</p>
+            <a class="btn btn-primary" href="/users">Wróć do listy</a>
+        </div>
+    </div>
+}
+else if (_loading)
+{
+    <div class="form-card"><p class="text-muted">Wczytywanie…</p></div>
+}
+else
+{
+    <div class="form-card">
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        <EditForm Model="_model" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="form-grid">
+                <div class="field">
+                    <label for="firstName">Imię <span class="req">*</span></label>
+                    <InputText id="firstName" class="form-control" @bind-Value="_model.FirstName" placeholder="np. Anna" />
+                    <ValidationMessage For="@(() => _model.FirstName)" />
+                </div>
+
+                <div class="field">
+                    <label for="lastName">Nazwisko <span class="req">*</span></label>
+                    <InputText id="lastName" class="form-control" @bind-Value="_model.LastName" placeholder="np. Kowalska" />
+                    <ValidationMessage For="@(() => _model.LastName)" />
+                </div>
+
+                <div class="field full">
+                    <label for="email">Adres e-mail <span class="req">*</span></label>
+                    <InputText id="email" type="email" class="form-control" @bind-Value="_model.Email" placeholder="np. anna.kowalska@firma.pl" />
+                    <ValidationMessage For="@(() => _model.Email)" />
+                </div>
+
+                <div class="field">
+                    <label for="phone">Telefon</label>
+                    <InputText id="phone" type="tel" class="form-control" @bind-Value="_model.Phone" placeholder="+48 600 000 000" />
+                    <span class="hint">Opcjonalne.</span>
+                    <ValidationMessage For="@(() => _model.Phone)" />
+                </div>
+
+                <div class="field">
+                    <label for="department">Dział <span class="req">*</span></label>
+                    <InputSelect id="department" class="form-select" @bind-Value="_model.Department">
+                        @foreach (var dept in DepartmentLabels.All)
+                        {
+                            <option value="@dept">@dept.ToPolish()</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="@(() => _model.Department)" />
+                </div>
+
+                <div class="switch-field">
+                    <InputCheckbox id="isActive" @bind-Value="_model.IsActive" />
+                    <label for="isActive">Konto aktywne</label>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <a class="btn btn-ghost" href="/users">Anuluj</a>
+                <button type="submit" class="btn btn-primary" disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span>Zapisywanie…</span>
+                    }
+                    else
+                    {
+                        <span>@(_isEdit ? "Zapisz zmiany" : "Dodaj użytkownika")</span>
+                    }
+                </button>
+            </div>
+        </EditForm>
+    </div>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private User _model = new();
+    private bool _isEdit;
+    private bool _loading;
+    private bool _notFound;
+    private bool _saving;
+    private string? _error;
+
+    private bool _initialized;
+    private int? _loadedId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_initialized && Id == _loadedId) return;
+        _initialized = true;
+        _loadedId = Id;
+        _error = null;
+        _notFound = false;
+
+        if (Id.HasValue)
+        {
+            _isEdit = true;
+            _loading = true;
+            var existing = await UserService.GetByIdAsync(Id.Value);
+            _loading = false;
+
+            if (existing is null)
+            {
+                _notFound = true;
+                return;
+            }
+            _model = existing;
+        }
+        else
+        {
+            _isEdit = false;
+            _model = new User();
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _error = null;
+        _saving = true;
+
+        var result = _isEdit
+            ? await UserService.UpdateAsync(_model)
+            : await UserService.CreateAsync(_model);
+
+        _saving = false;
+
+        if (result.Success)
+        {
+            Nav.NavigateTo($"/users?msg={(_isEdit ? "updated" : "created")}");
+        }
+        else
+        {
+            _error = result.Error ?? "Wystąpił błąd podczas zapisu.";
+        }
+    }
+}

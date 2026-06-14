@@ -1,0 +1,217 @@
+@page "/users"
+@using UserManager.Models
+@using UserManager.Services
+@using UserManager.Components.Shared
+@inject IUserService UserService
+@inject NavigationManager Nav
+
+<PageTitle>Użytkownicy · UserManager</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Użytkownicy</h1>
+        <p>Dodawaj, edytuj i usuwaj rekordy użytkowników.</p>
+    </div>
+    <button class="btn btn-primary" @onclick="@(() => Nav.NavigateTo("/users/new"))">
+        + Dodaj użytkownika
+    </button>
+</div>
+
+<div class="card-panel">
+    <div class="toolbar">
+        <div class="search-box">
+            <span class="icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
+            <input type="text" placeholder="Szukaj po imieniu, nazwisku lub e-mailu…"
+                   value="@_search" @oninput="OnSearchInput" />
+        </div>
+        <span class="text-muted" style="font-size:.85rem;">@_users.Count @CountLabel(_users.Count)</span>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="empty"><p>Wczytywanie…</p></div>
+    }
+    else if (_users.Count == 0)
+    {
+        <div class="empty">
+            <div class="glyph">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+            </div>
+            @if (string.IsNullOrWhiteSpace(_search))
+            {
+                <h3>Brak użytkowników</h3>
+                <p>Nie ma jeszcze żadnych rekordów. Dodaj pierwszego użytkownika.</p>
+                <a class="btn btn-primary" href="/users/new">+ Dodaj użytkownika</a>
+            }
+            else
+            {
+                <h3>Brak wyników</h3>
+                <p>Żaden użytkownik nie pasuje do zapytania „@_search”.</p>
+                <button class="btn btn-ghost" @onclick="ClearSearch">Wyczyść wyszukiwanie</button>
+            }
+        </div>
+    }
+    else
+    {
+        <table class="user-table">
+            <thead>
+                <tr>
+                    <th>Użytkownik</th>
+                    <th class="hide-sm">Telefon</th>
+                    <th class="hide-sm">Dział</th>
+                    <th>Status</th>
+                    <th style="text-align:right;">Akcje</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in _users)
+                {
+                    <tr>
+                        <td>
+                            <div class="user-cell">
+                                <UserAvatar Name="@user.FullName" />
+                                <div>
+                                    <div class="name">@user.FullName</div>
+                                    <div class="email">@user.Email</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="hide-sm">@(string.IsNullOrWhiteSpace(user.Phone) ? "—" : user.Phone)</td>
+                        <td class="hide-sm"><span class="tag">@user.Department.ToPolish()</span></td>
+                        <td>
+                            @if (user.IsActive)
+                            {
+                                <span class="badge-status on">Aktywny</span>
+                            }
+                            else
+                            {
+                                <span class="badge-status off">Nieaktywny</span>
+                            }
+                        </td>
+                        <td>
+                            <div class="row-actions">
+                                <button class="btn btn-ghost btn-sm" @onclick="@(() => Nav.NavigateTo($"/users/{user.Id}/edit"))">
+                                    Edytuj
+                                </button>
+                                <button class="btn btn-ghost btn-sm" @onclick="@(() => RequestDelete(user))"
+                                        style="color:var(--danger);" title="Usuń">
+                                    Usuń
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (_pendingDelete is not null)
+{
+    <div class="modal-backdrop-app" @onclick="CancelDelete">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <h3>Usunąć użytkownika?</h3>
+            <p>
+                Czy na pewno chcesz usunąć rekord <strong>@_pendingDelete.FullName</strong>?
+                Tej operacji nie można cofnąć.
+            </p>
+            <div class="modal-actions">
+                <button class="btn btn-ghost" @onclick="CancelDelete" disabled="@_deleting">Anuluj</button>
+                <button class="btn btn-danger" @onclick="ConfirmDelete" disabled="@_deleting">
+                    @(_deleting ? "Usuwanie…" : "Usuń")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_toast is not null)
+{
+    <div class="toast-host">
+        <div class="toast @(_toastOk ? "ok" : "")">@_toast</div>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery] public string? Msg { get; set; }
+
+    private List<User> _users = new();
+    private bool _loading = true;
+    private string _search = string.Empty;
+
+    private User? _pendingDelete;
+    private bool _deleting;
+
+    private string? _toast;
+    private bool _toastOk = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+
+        var message = Msg switch
+        {
+            "created" => "Użytkownik został dodany.",
+            "updated" => "Zmiany zostały zapisane.",
+            _ => null
+        };
+        if (message is not null)
+        {
+            _ = ShowToast(message, true);
+        }
+    }
+
+    private async Task Load()
+    {
+        _loading = true;
+        _users = await UserService.GetAllAsync(_search);
+        _loading = false;
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? string.Empty;
+        await Load();
+    }
+
+    private async Task ClearSearch()
+    {
+        _search = string.Empty;
+        await Load();
+    }
+
+    private void RequestDelete(User user) => _pendingDelete = user;
+
+    private void CancelDelete()
+    {
+        if (!_deleting) _pendingDelete = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_pendingDelete is null) return;
+
+        _deleting = true;
+        var name = _pendingDelete.FullName;
+        var ok = await UserService.DeleteAsync(_pendingDelete.Id);
+        _deleting = false;
+        _pendingDelete = null;
+
+        await Load();
+        _ = ShowToast(ok ? $"Usunięto: {name}." : "Nie udało się usunąć rekordu.", ok);
+    }
+
+    private async Task ShowToast(string message, bool ok)
+    {
+        _toast = message;
+        _toastOk = ok;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3200);
+        _toast = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string CountLabel(int n) => n == 1 ? "użytkownik" : "użytkowników";
+}
