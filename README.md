@@ -29,8 +29,7 @@ dotnet restore
 dotnet run
 ```
 
-Po starcie aplikacja wypisze adres (domyślnie `https://localhost:5001`
-lub `http://localhost:5000`). Otwórz go w przeglądarce.
+Po starcie aplikacja wypisze adres: https://localhost:5040. Otwórz go w przeglądarce.
 
 ### Wariant B — Visual Studio
 
